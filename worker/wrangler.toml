@@ -1,0 +1,11 @@
+name = "navidad-colmadon-api"
+main = "src/index.ts"
+compatibility_date = "2026-11-05"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "navidad-colmadon-db"
+database_id = "REPLACE_WITH_CLOUDFLARE_DATABASE_ID"
+
+[vars]
+FRONTEND_ORIGIN = "https://<owner>.github.io/navidad-colmadon-2.0"

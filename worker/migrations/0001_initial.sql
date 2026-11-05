@@ -1,0 +1,12 @@
+PRAGMA foreign_keys = ON;
+CREATE TABLE events (id TEXT PRIMARY KEY, name TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, published_at TEXT);
+INSERT INTO events (id, name) VALUES ('main', 'Navidad Colmadon 2.0');
+CREATE TABLE participants (id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE, full_name TEXT NOT NULL, code_hash TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)), UNIQUE(event_id, code_hash), UNIQUE(event_id, full_name));
+CREATE TABLE dishes (id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE, name TEXT NOT NULL, description TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(event_id, name));
+CREATE TABLE assignments (id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE, participant_id TEXT NOT NULL REFERENCES participants(id) ON DELETE CASCADE, angelito_recipient_id TEXT NOT NULL REFERENCES participants(id) ON DELETE RESTRICT, food_dish_id TEXT NOT NULL REFERENCES dishes(id) ON DELETE RESTRICT, angelito_revealed_at TEXT, food_revealed_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(event_id, participant_id), UNIQUE(event_id, angelito_recipient_id), UNIQUE(event_id, food_dish_id), CHECK (participant_id <> angelito_recipient_id));
+CREATE TABLE admin_users (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, is_active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE sessions (id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, user_type TEXT NOT NULL CHECK (user_type IN ('participant', 'admin')), user_id TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE login_attempts (id TEXT PRIMARY KEY, identifier_hash TEXT NOT NULL, attempted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, success INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX idx_sessions_token ON sessions(token_hash);
+CREATE INDEX idx_sessions_expiry ON sessions(expires_at);
+CREATE INDEX idx_attempts_identifier_time ON login_attempts(identifier_hash, attempted_at);
