@@ -26,7 +26,7 @@ npx wrangler secret put CODE_PEPPER
 npx wrangler secret put ADMIN_SETUP_KEY
 ```
 
-6. Despliega con `npm run deploy`. Configura `VITE_API_URL` como variable del entorno `github-pages` en GitHub Actions.
+6. Despliega con `npm run deploy`. El Worker publicado es `https://navidad-colmadon-api.alexanderrodriguezacevedo.workers.dev`. Configura esa URL como variable `VITE_API_URL` del entorno `github-pages` en GitHub Actions.
 
 Los valores secretos no se guardan en Git ni en el frontend. La migración crea el evento, pero los 10 participantes y 10 platos deben registrarse desde el panel administrativo antes de publicar.
 
