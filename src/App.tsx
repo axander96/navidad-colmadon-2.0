@@ -50,7 +50,7 @@ function App() {
     <header className="topbar">
       <button className="brand" onClick={() => setView('login')}><span className="brand-mark"><Sparkles size={16} /></span><span>Navidad <strong>Colmadon 2.0</strong></span></button>
       <div className="topbar-actions">
-        {view === 'login' && <button className="quiet-button" onClick={() => setView('admin-login')}><WandSparkles size={15} /> Organizador</button>}
+        {view !== 'login' && view !== 'home' && <button className="quiet-button" onClick={() => setView('admin-login')}><WandSparkles size={15} /> Organizador</button>}
         {view !== 'login' && view !== 'admin' && <button className="quiet-button" onClick={() => setView('login')}>Acceso</button>}
         {(view === 'dashboard' || view === 'admin') && <button className="quiet-button" onClick={() => { sessionStorage.removeItem(view === 'admin' ? 'navidad_admin_session' : 'navidad_session'); setView('login') }}><LogOut size={15} /> Salir</button>}
       </div>
