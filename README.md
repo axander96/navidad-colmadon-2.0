@@ -46,6 +46,8 @@ Wrangler solicitará la clave de forma interactiva; no la guardes en Git.
 5. Agrega exactamente 10 participantes y 10 platos. El código de cada participante se muestra solo al crearlo; cópialo o entrégalo en ese momento.
 6. Cuando ambos contadores estén en `10/10`, pulsa **PUBLICAR EVENTO Y GENERAR SORTEOS**. Después de publicar no se permiten cambios.
 
+El botón **REINICIAR SORTEO** solo aparece después de publicar. Reinicia los resultados y devuelve el evento a borrador, pero conserva todos los participantes, sus códigos y los platos. Requiere confirmación y luego debes volver a publicar para generar nuevas asignaciones.
+
 ## GitHub Pages
 
 Activa Pages con la fuente **GitHub Actions**. El workflow `.github/workflows/deploy.yml` compila y publica `dist` en cada push a `main`.

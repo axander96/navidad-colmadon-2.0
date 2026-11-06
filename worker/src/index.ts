@@ -191,6 +191,16 @@ async function publish(env: Env, origin: string) {
   return json({ success: true, message: 'Evento publicado y sorteos fijados.' }, 200, origin)
 }
 
+async function resetEvent(env: Env, origin: string) {
+  const event = await env.DB.prepare("SELECT status FROM events WHERE id = 'main'").first<{ status: string }>()
+  if (event?.status !== 'published') return json({ success: false, message: 'El evento ya está en borrador.' }, 409, origin)
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM assignments WHERE event_id = 'main'"),
+    env.DB.prepare("UPDATE events SET status = 'draft', published_at = NULL WHERE id = 'main'"),
+  ])
+  return json({ success: true, message: 'Sorteo reiniciado. Participantes y platos fueron conservados.' }, 200, origin)
+}
+
 async function reveal(env: Env, kind: 'angelito' | 'food', current: Session, origin: string) {
   const revealed = kind === 'angelito' ? 'angelito_revealed_at' : 'food_revealed_at'
   const label = kind === 'angelito' ? 'p.full_name AS result' : 'd.name AS result'
@@ -225,6 +235,7 @@ export default {
       if (participantMatch && request.method === 'DELETE') return removeDraftItem(request, env, origin, 'participants', participantMatch[1])
       const dishMatch = url.pathname.match(/^\/api\/admin\/dishes\/([^/]+)$/)
       if (dishMatch && request.method === 'DELETE') return removeDraftItem(request, env, origin, 'dishes', dishMatch[1])
+      if (url.pathname === '/api/admin/events/main/reset' && request.method === 'POST') return resetEvent(env, origin)
       if (url.pathname === '/api/admin/events/main/publish' && request.method === 'POST') return publish(env, origin)
       return json({ success: false, message: 'Ruta no encontrada.' }, 404, origin)
     } catch (error) {
