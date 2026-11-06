@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, Check, ChefHat, Gift, KeyRound, LockKeyhole, LogOut, ShieldCheck, Sparkles, UtensilsCrossed, Users, WandSparkles } from 'lucide-react'
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import './App.css'
 
 type View = 'home' | 'login' | 'dashboard' | 'admin-login' | 'admin'
@@ -75,8 +75,25 @@ function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
   return <motion.section className="center-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><div className="login-card"><div className="card-icon"><KeyRound size={22} /></div><span className="eyebrow">Área del organizador</span><h2>{setup ? 'Configurar administrador' : 'Panel administrativo'}</h2><p>{setup ? 'Usa la clave de configuración de Cloudflare solo una vez.' : 'Gestiona participantes, platos y publicación del evento.'}</p><form onSubmit={submit}><label>Usuario</label><input value={username} onChange={(event) => setUsername(event.target.value)} required /><label>Contraseña</label><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />{setup && <><label>ADMIN_SETUP_KEY</label><input type="password" value={setupKey} onChange={(event) => setSetupKey(event.target.value)} required /></>}{error && <div className="error-message">{error}</div>}<button className="primary-button full" disabled={busy}>{busy ? 'PROCESANDO…' : setup ? 'CREAR ADMINISTRADOR' : 'ENTRAR AL PANEL'} <ArrowRight size={17} /></button></form><button className="link-button" onClick={() => { setSetup(!setup); setError('') }}>{setup ? 'Ya tengo administrador' : 'Configuración inicial'}</button></div></motion.section>
 }
 
+function BackgroundMusic() {
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [blocked, setBlocked] = useState(false)
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    void audio.play().catch(() => setBlocked(true))
+    return () => audio.pause()
+  }, [])
+
+  return <div className="music-player">
+    <audio ref={audioRef} src={`${import.meta.env.BASE_URL}audio/navidad.mp3`} loop controls onError={() => setBlocked(true)} onPlay={() => setBlocked(false)} aria-label="Música navideña de fondo" />
+    {blocked && <span>Presiona reproducir para activar la música.</span>}
+  </div>
+}
+
 function ParticipantDashboard({ name, revealed, onReveal }: { name: string; revealed: Partial<Record<Reveal, string>>; onReveal: (kind: Reveal) => Promise<void> }) {
-  return <motion.section className="dashboard-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><div className="dashboard-heading"><div><h2>Hola, <em>{name}</em></h2></div><div className="status-pill"><span /> Evento publicado</div></div><div className="experience-grid"><ExperienceCard type="angelito" result={revealed.angelito} onReveal={onReveal} /><ExperienceCard type="food" result={revealed.food} onReveal={onReveal} /></div></motion.section>
+  return <motion.section className="dashboard-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><BackgroundMusic /><div className="dashboard-heading"><div><h2>Hola, <em>{name}</em></h2></div><div className="status-pill"><span /> Evento publicado</div></div><div className="experience-grid"><ExperienceCard type="angelito" result={revealed.angelito} onReveal={onReveal} /><ExperienceCard type="food" result={revealed.food} onReveal={onReveal} /></div></motion.section>
 }
 
 function ExperienceCard({ type, result, onReveal }: { type: Reveal; result?: string; onReveal: (kind: Reveal) => Promise<void> }) {
