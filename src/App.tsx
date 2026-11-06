@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowRight, Check, ChefHat, Gift, KeyRound, LockKeyhole, LogOut, ShieldCheck, Sparkles, UtensilsCrossed, Users, WandSparkles } from 'lucide-react'
+import { ArrowRight, Check, ChefHat, Gift, KeyRound, LockKeyhole, LogOut, Pause, Play, ShieldCheck, Sparkles, Volume2, VolumeX, UtensilsCrossed, Users, WandSparkles } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import './App.css'
 
@@ -78,16 +78,32 @@ function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
 function BackgroundMusic() {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [blocked, setBlocked] = useState(false)
+  const [playing, setPlaying] = useState(false)
+  const [muted, setMuted] = useState(false)
 
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
-    void audio.play().catch(() => setBlocked(true))
+    void audio.play().then(() => setPlaying(true)).catch(() => setBlocked(true))
     return () => audio.pause()
   }, [])
 
-  return <div className="music-player">
-    <audio ref={audioRef} src={`${import.meta.env.BASE_URL}audio/navidad.mp3`} loop controls onError={() => setBlocked(true)} onPlay={() => setBlocked(false)} aria-label="Música navideña de fondo" />
+  const togglePlayback = () => {
+    const audio = audioRef.current
+    if (!audio) return
+    if (audio.paused) { void audio.play().then(() => { setPlaying(true); setBlocked(false) }) } else { audio.pause(); setPlaying(false) }
+  }
+  const toggleMute = () => {
+    const audio = audioRef.current
+    if (!audio) return
+    audio.muted = !audio.muted
+    setMuted(audio.muted)
+  }
+
+  return <div className="music-player" aria-label="Controles de música">
+    <audio ref={audioRef} src={`${import.meta.env.BASE_URL}audio/navidad.mp3`} loop onError={() => setBlocked(true)} onPlay={() => { setPlaying(true); setBlocked(false) }} onPause={() => setPlaying(false)} />
+    <button className="music-button" type="button" onClick={togglePlayback} aria-label={playing ? 'Pausar música' : 'Reproducir música'}>{playing ? <Pause size={15} /> : <Play size={15} />}</button>
+    <button className="music-button" type="button" onClick={toggleMute} aria-label={muted ? 'Activar volumen' : 'Silenciar música'}>{muted ? <VolumeX size={15} /> : <Volume2 size={15} />}</button>
     {blocked && <span>Presiona reproducir para activar la música.</span>}
   </div>
 }
@@ -99,7 +115,7 @@ function ParticipantDashboard({ name, revealed, onReveal }: { name: string; reve
 function ExperienceCard({ type, result, onReveal }: { type: Reveal; result?: string; onReveal: (kind: Reveal) => Promise<void> }) {
   const angelito = type === 'angelito'; const [busy, setBusy] = useState(false)
   const click = async () => { setBusy(true); try { await onReveal(type) } finally { setBusy(false) } }
-  return <motion.article className={`experience-card ${angelito ? 'card-green' : 'card-red'}`} whileHover={{ y: -5 }}><div className="card-topline"><span>{result ? <><Check size={14} /> Revelado</> : 'Pendiente'}</span></div><div className="experience-icon">{angelito ? <Gift size={26} /> : <ChefHat size={26} />}</div><h3>{angelito ? 'Mi Angelito' : 'Mi plato navideño'}</h3><p>{angelito ? 'Descubre a quién tendrás que sorprender. El precio mínimo del regalo es RD$500.' : 'Descubre qué plato te corresponde llevar a la celebración.'}</p>{result ? <div className="revealed-result"><Sparkles size={17} /><span><strong>{result}</strong><small>{angelito ? 'Tu Angelito' : 'Tu plato navideño'}</small></span></div> : <button className="outline-button" disabled={busy} onClick={() => void click()}>{busy ? 'CARGANDO…' : angelito ? 'GIRAR RULETA' : 'DESCUBRIR MI PLATO'} <ArrowRight size={16} /></button>}</motion.article>
+  return <motion.article className={`experience-card ${angelito ? 'card-green' : 'card-red'}`} whileHover={{ y: -5 }}><div className="card-topline"><span>{result ? <><Check size={14} /> Revelado</> : 'Pendiente'}</span></div><div className="experience-icon">{angelito ? <Gift size={26} /> : <ChefHat size={26} />}</div><h3>{angelito ? 'Mi Angelito' : 'Mi plato navideño'}</h3><p>{angelito ? 'Descubre a quién tendrás que sorprender. El precio mínimo del regalo es RD$500.' : 'Descubre qué plato te corresponde llevar a la celebración.'}</p>{result ? <div className="revealed-result"><Sparkles size={17} /><span><strong>{result}</strong><small>{angelito ? 'Tu Angelito' : 'Tu plato navideño'}</small></span></div> : <button className="outline-button" disabled={busy} onClick={() => void click()}>{busy ? 'CARGANDO…' : angelito ? 'REVELAR NOMBRE' : 'DESCUBRIR MI PLATO'} <ArrowRight size={16} /></button>}</motion.article>
 }
 
 function AdminDashboard({ onError }: { onError: (message: string) => void }) {
