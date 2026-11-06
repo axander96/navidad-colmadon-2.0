@@ -40,9 +40,11 @@ const personalCode = () => {
 const bodyOf = async <T>(request: Request): Promise<T> => request.json<T>().catch(() => ({} as T))
 
 async function passwordHash(password: string, salt: string) {
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits'])
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: new TextEncoder().encode(salt), iterations: 210_000, hash: 'SHA-256' }, key, 256)
-  return hex(new Uint8Array(bits))
+  let value = new TextEncoder().encode(`${salt}:${password}`)
+  for (let iteration = 0; iteration < 10_000; iteration += 1) {
+    value = new Uint8Array(await crypto.subtle.digest('SHA-256', value))
+  }
+  return hex(value)
 }
 
 async function createSession(env: Env, userId: string, userType: Session['userType']) {
@@ -203,7 +205,7 @@ async function reveal(env: Env, kind: 'angelito' | 'food', current: Session, ori
 export default {
   async fetch(request: Request, env: Env) {
     const origin = env.FRONTEND_ORIGIN || '*'
-    if (request.method === 'OPTIONS') return json(null, 204, origin)
+    if (request.method === 'OPTIONS') return json({ success: true }, 200, origin)
     const url = new URL(request.url)
     try {
       if (url.pathname === '/api/auth/participant' && request.method === 'POST') return participantLogin(request, env, origin)
@@ -226,7 +228,7 @@ export default {
       if (url.pathname === '/api/admin/events/main/publish' && request.method === 'POST') return publish(env, origin)
       return json({ success: false, message: 'Ruta no encontrada.' }, 404, origin)
     } catch (error) {
-      console.error(error)
+      console.error('request_failed', error instanceof Error ? error.message : String(error))
       return json({ success: false, message: 'Error interno del servidor.' }, 500, origin)
     }
   },

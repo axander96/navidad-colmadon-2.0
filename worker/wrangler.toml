@@ -8,4 +8,4 @@ database_name = "navidad-colmadon-db"
 database_id = "4675a194-1c6a-43cd-8bcc-19f5145a4490"
 
 [vars]
-FRONTEND_ORIGIN = "https://axander96.github.io/navidad-colmadon-2.0"
+FRONTEND_ORIGIN = "https://axander96.github.io"
