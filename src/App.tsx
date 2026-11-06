@@ -50,9 +50,9 @@ function App() {
     <header className="topbar">
       <button className="brand" onClick={() => setView('login')}><img className="brand-icon" width="48" height="48" src="https://img.icons8.com/color/48/christmas.png" alt="Navidad" /><span>Navidad Colmadon 2.0</span></button>
       <div className="topbar-actions">
-        {view !== 'login' && view !== 'home' && <button className="quiet-button" onClick={() => setView('admin-login')}><WandSparkles size={15} /> Organizador</button>}
-        {view !== 'login' && view !== 'admin' && <button className="quiet-button" onClick={() => setView('login')}>Acceso</button>}
-        {(view === 'dashboard' || view === 'admin') && <button className="quiet-button" onClick={() => { sessionStorage.removeItem(view === 'admin' ? 'navidad_admin_session' : 'navidad_session'); setView('login') }}><LogOut size={15} /> Salir</button>}
+        {view !== 'dashboard' && view !== 'admin' && view !== 'login' && <button className="quiet-button" onClick={() => setView('admin-login')}><WandSparkles size={15} /> Organizador</button>}
+        {view !== 'dashboard' && view !== 'login' && view !== 'admin' && <button className="quiet-button" onClick={() => setView('login')}>Acceso</button>}
+        {(view === 'dashboard' || view === 'admin') && <button className={`quiet-button ${view === 'dashboard' ? 'logout-button' : ''}`} onClick={() => { sessionStorage.removeItem(view === 'admin' ? 'navidad_admin_session' : 'navidad_session'); setView('login') }}><LogOut size={15} /> Salir</button>}
       </div>
     </header>
     <AnimatePresence mode="wait">
