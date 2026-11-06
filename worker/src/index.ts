@@ -75,10 +75,18 @@ async function participantLogin(request: Request, env: Env, origin: string) {
   if (!normalized || normalized.length < 6) return json({ success: false, message: 'Código inválido.' }, 400, origin)
   const event = await env.DB.prepare("SELECT status FROM events WHERE id = 'main'").first<{ status: string }>()
   if (event?.status !== 'published') return json({ success: false, message: 'El evento todavía no está publicado.' }, 409, origin)
-  const row = await env.DB.prepare('SELECT id FROM participants WHERE event_id = ? AND code_hash = ? AND is_active = 1')
-    .bind('main', await hmac(normalized, env.CODE_PEPPER)).first<{ id: string }>()
+  const row = await env.DB.prepare('SELECT id, full_name FROM participants WHERE event_id = ? AND code_hash = ? AND is_active = 1')
+    .bind('main', await hmac(normalized, env.CODE_PEPPER)).first<{ id: string; full_name: string }>()
   if (!row) return json({ success: false, message: 'El código no es válido.' }, 401, origin)
-  return json({ success: true, data: { token: await createSession(env, row.id, 'participant') } }, 200, origin)
+  return json({ success: true, data: { token: await createSession(env, row.id, 'participant'), participantName: row.full_name } }, 200, origin)
+}
+
+async function participantMe(request: Request, env: Env, origin: string) {
+  const current = await getSession(request, env)
+  if (!current || current.userType !== 'participant') return json({ success: false, message: 'Sesión inválida o caducada.' }, 401, origin)
+  const participant = await env.DB.prepare('SELECT full_name FROM participants WHERE id = ? AND event_id = ?').bind(current.userId, 'main').first<{ full_name: string }>()
+  if (!participant) return json({ success: false, message: 'Participante no encontrado.' }, 404, origin)
+  return json({ success: true, data: { participantName: participant.full_name } }, 200, origin)
 }
 
 async function setupAdmin(request: Request, env: Env, origin: string) {
@@ -219,6 +227,7 @@ export default {
     const url = new URL(request.url)
     try {
       if (url.pathname === '/api/auth/participant' && request.method === 'POST') return participantLogin(request, env, origin)
+      if (url.pathname === '/api/participant/me' && request.method === 'GET') return participantMe(request, env, origin)
       if (url.pathname === '/api/admin/setup' && request.method === 'POST') return setupAdmin(request, env, origin)
       if (url.pathname === '/api/admin/login' && request.method === 'POST') return adminLogin(request, env, origin)
       const current = await getSession(request, env)

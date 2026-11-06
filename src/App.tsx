@@ -25,17 +25,18 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
 }
 
 function App() {
-  const [view, setView] = useState<View>('home')
+  const [view, setView] = useState<View>('login')
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [revealed, setRevealed] = useState<Partial<Record<Reveal, string>>>({})
+  const [participantName, setParticipantName] = useState('')
 
   const participantLogin = async (event: FormEvent) => {
     event.preventDefault(); setError('')
     if (code.trim().length < 6) { setError('Escribe tu código personal.'); return }
     setBusy(true)
-    try { const data = await request<{ token: string }>('/api/auth/participant', { method: 'POST', body: JSON.stringify({ code }) }); sessionStorage.setItem('navidad_session', data.token); setView('dashboard') }
+    try { const data = await request<{ token: string; participantName: string }>('/api/auth/participant', { method: 'POST', body: JSON.stringify({ code }) }); sessionStorage.setItem('navidad_session', data.token); setParticipantName(data.participantName); setView('dashboard') }
     catch (caught) { setError(caught instanceof Error ? caught.message : 'No pudimos iniciar sesión.') }
     finally { setBusy(false) }
   }
@@ -47,31 +48,25 @@ function App() {
   return <main className="app-shell">
     <div className="ambient ambient-left" /><div className="ambient ambient-right" />
     <header className="topbar">
-      <button className="brand" onClick={() => setView('home')}><span className="brand-mark"><Sparkles size={16} /></span><span>Navidad <strong>Colmadon 2.0</strong></span></button>
+      <button className="brand" onClick={() => setView('login')}><span className="brand-mark"><Sparkles size={16} /></span><span>Navidad <strong>Colmadon 2.0</strong></span></button>
       <div className="topbar-actions">
-        {view === 'home' && <button className="quiet-button" onClick={() => setView('admin-login')}><WandSparkles size={15} /> Organizador</button>}
-        {view !== 'home' && view !== 'admin' && <button className="quiet-button" onClick={() => setView('home')}>Inicio</button>}
-        {(view === 'dashboard' || view === 'admin') && <button className="quiet-button" onClick={() => { sessionStorage.removeItem(view === 'admin' ? 'navidad_admin_session' : 'navidad_session'); setView('home') }}><LogOut size={15} /> Salir</button>}
+        {view === 'login' && <button className="quiet-button" onClick={() => setView('admin-login')}><WandSparkles size={15} /> Organizador</button>}
+        {view !== 'login' && view !== 'admin' && <button className="quiet-button" onClick={() => setView('login')}>Acceso</button>}
+        {(view === 'dashboard' || view === 'admin') && <button className="quiet-button" onClick={() => { sessionStorage.removeItem(view === 'admin' ? 'navidad_admin_session' : 'navidad_session'); setView('login') }}><LogOut size={15} /> Salir</button>}
       </div>
     </header>
     <AnimatePresence mode="wait">
-      {view === 'home' && <Home onEnter={() => setView('login')} />}
-      {view === 'login' && <Login title="Tu sorpresa te espera" subtitle="Introduce el código personal que recibiste para entrar a la experiencia." label="Código personal" value={code} onChange={(value) => setCode(value.toUpperCase())} onSubmit={participantLogin} error={error} busy={busy} />}
-      {view === 'dashboard' && <ParticipantDashboard revealed={revealed} onReveal={reveal} />}
+      {view === 'login' && <Login title="Entra a tu experiencia" subtitle="Usa el código personal que te entregó el organizador." label="Código personal" value={code} onChange={(value) => setCode(value.toUpperCase())} onSubmit={participantLogin} error={error} busy={busy} onOrganizer={() => setView('admin-login')} />}
+      {view === 'dashboard' && <ParticipantDashboard name={participantName} revealed={revealed} onReveal={reveal} />}
       {view === 'admin-login' && <AdminLogin onSuccess={() => setView('admin')} />}
       {view === 'admin' && <AdminDashboard onError={setError} />}
     </AnimatePresence>
     {error && view === 'admin' && <div className="toast error-message">{error}</div>}
-    <footer className="footer"><span>Navidad “Colmadon 2.0”</span><span>Hecho para compartir lo que importa <span className="heart">♥</span></span></footer>
   </main>
 }
 
-function Home({ onEnter }: { onEnter: () => void }) {
-  return <motion.section className="hero-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><div className="hero-copy"><span className="eyebrow"><span className="eyebrow-dot" /> Una celebración para compartir</span><h1>La magia de la Navidad<br /><em>se vive juntos.</em></h1><p className="hero-description">Un momento especial, dos sorpresas y toda la alegría de nuestro Colmadón. Descubre tu misión para esta Navidad.</p><button className="primary-button" onClick={onEnter}>ENTRAR A LA EXPERIENCIA <ArrowRight size={18} /></button><p className="helper-text"><LockKeyhole size={13} /> Tu código personal mantiene tu sorpresa privada</p></div><div className="hero-art" aria-label="Ilustración navideña"><div className="orbit orbit-one" /><div className="orbit orbit-two" /><motion.div className="gift gift-back" animate={{ y: [0, -8, 0] }} transition={{ duration: 4, repeat: Infinity }}><Gift size={62} /></motion.div><motion.div className="tree" animate={{ y: [0, -5, 0] }} transition={{ duration: 5, repeat: Infinity }}><div className="star">✦</div><div className="tree-layer layer-one" /><div className="tree-layer layer-two" /><div className="tree-layer layer-three" /><div className="tree-trunk" /></motion.div><motion.div className="gift gift-front" animate={{ y: [0, 7, 0] }} transition={{ duration: 3.5, repeat: Infinity }}><Gift size={48} /></motion.div><div className="art-label"><Sparkles size={14} /> Felices fiestas</div></div></motion.section>
-}
-
-function Login({ title, subtitle, label, value, onChange, onSubmit, error, busy }: { title: string; subtitle: string; label: string; value: string; onChange: (value: string) => void; onSubmit: (event: FormEvent) => void; error: string; busy: boolean }) {
-  return <motion.section className="center-page" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}><div className="login-card"><div className="card-icon"><LockKeyhole size={22} /></div><span className="eyebrow">Acceso privado</span><h2>{title}</h2><p>{subtitle}</p><form onSubmit={onSubmit}><label htmlFor="access">{label}</label><input id="access" value={value} onChange={(event) => onChange(event.target.value)} autoComplete="one-time-code" />{error && <div className="error-message" role="alert">{error}</div>}<button className="primary-button full" disabled={busy}>{busy ? 'VALIDANDO…' : 'INGRESAR'} <ArrowRight size={17} /></button></form><div className="privacy-note"><ShieldCheck size={16} /><span>El acceso está protegido.</span></div></div></motion.section>
+function Login({ title, subtitle, label, value, onChange, onSubmit, error, busy, onOrganizer }: { title: string; subtitle: string; label: string; value: string; onChange: (value: string) => void; onSubmit: (event: FormEvent) => void; error: string; busy: boolean; onOrganizer: () => void }) {
+  return <motion.section className="center-page" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}><div className="login-card"><div className="login-emblem"><LockKeyhole size={25} /></div><span className="eyebrow">Navidad “Colmadon 2.0”</span><h2>{title}</h2><p>{subtitle}</p><form onSubmit={onSubmit}><label htmlFor="access">{label}</label><input id="access" value={value} onChange={(event) => onChange(event.target.value)} autoComplete="one-time-code" placeholder="Escribe tu código" />{error && <div className="error-message" role="alert">{error}</div>}<button className="primary-button full" disabled={busy}>{busy ? 'VALIDANDO…' : 'INGRESAR'} <ArrowRight size={17} /></button></form><div className="privacy-note"><ShieldCheck size={16} /><span>Tu acceso es privado y seguro.</span></div><div className="organizer-entry"><span>¿Eres el organizador?</span><button className="link-button" onClick={onOrganizer}><WandSparkles size={13} /> Entrar al panel</button></div></div></motion.section>
 }
 
 function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
@@ -80,14 +75,14 @@ function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
   return <motion.section className="center-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><div className="login-card"><div className="card-icon"><KeyRound size={22} /></div><span className="eyebrow">Área del organizador</span><h2>{setup ? 'Configurar administrador' : 'Panel administrativo'}</h2><p>{setup ? 'Usa la clave de configuración de Cloudflare solo una vez.' : 'Gestiona participantes, platos y publicación del evento.'}</p><form onSubmit={submit}><label>Usuario</label><input value={username} onChange={(event) => setUsername(event.target.value)} required /><label>Contraseña</label><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />{setup && <><label>ADMIN_SETUP_KEY</label><input type="password" value={setupKey} onChange={(event) => setSetupKey(event.target.value)} required /></>}{error && <div className="error-message">{error}</div>}<button className="primary-button full" disabled={busy}>{busy ? 'PROCESANDO…' : setup ? 'CREAR ADMINISTRADOR' : 'ENTRAR AL PANEL'} <ArrowRight size={17} /></button></form><button className="link-button" onClick={() => { setSetup(!setup); setError('') }}>{setup ? 'Ya tengo administrador' : 'Configuración inicial'}</button></div></motion.section>
 }
 
-function ParticipantDashboard({ revealed, onReveal }: { revealed: Partial<Record<Reveal, string>>; onReveal: (kind: Reveal) => Promise<void> }) {
-  return <motion.section className="dashboard-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><div className="dashboard-heading"><div><span className="eyebrow">Tu espacio personal</span><h2>Hola, <em>participante.</em></h2><p>Tu Navidad comienza con dos pequeñas sorpresas.</p></div><div className="status-pill"><span /> Evento publicado</div></div><div className="experience-grid"><ExperienceCard type="angelito" result={revealed.angelito} onReveal={onReveal} /><ExperienceCard type="food" result={revealed.food} onReveal={onReveal} /></div><div className="dashboard-footer"><ShieldCheck size={15} /> Los resultados son definitivos y están protegidos en el servidor.</div></motion.section>
+function ParticipantDashboard({ name, revealed, onReveal }: { name: string; revealed: Partial<Record<Reveal, string>>; onReveal: (kind: Reveal) => Promise<void> }) {
+  return <motion.section className="dashboard-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><div className="dashboard-heading"><div><h2>Hola, <em>{name}</em></h2></div><div className="status-pill"><span /> Evento publicado</div></div><div className="experience-grid"><ExperienceCard type="angelito" result={revealed.angelito} onReveal={onReveal} /><ExperienceCard type="food" result={revealed.food} onReveal={onReveal} /></div></motion.section>
 }
 
 function ExperienceCard({ type, result, onReveal }: { type: Reveal; result?: string; onReveal: (kind: Reveal) => Promise<void> }) {
   const angelito = type === 'angelito'; const [busy, setBusy] = useState(false)
   const click = async () => { setBusy(true); try { await onReveal(type) } finally { setBusy(false) } }
-  return <motion.article className={`experience-card ${angelito ? 'card-green' : 'card-gold'}`} whileHover={{ y: -5 }}><div className="card-topline"><span className="card-number">0{angelito ? 1 : 2}</span><span>{result ? <><Check size={14} /> Revelado</> : 'Pendiente'}</span></div><div className="experience-icon">{angelito ? <Gift size={26} /> : <ChefHat size={26} />}</div><h3>{angelito ? 'Mi Angelito' : 'Mi plato navideño'}</h3><p>{angelito ? 'Descubre a quién tendrás que sorprender con un regalo esta Navidad.' : 'Descubre qué plato te corresponde llevar a la celebración.'}</p>{result ? <div className="revealed-result"><Sparkles size={17} /><span><strong>{result}</strong><small>{angelito ? 'Tu Angelito' : 'Tu plato navideño'}</small></span></div> : <button className="outline-button" disabled={busy} onClick={() => void click()}>{busy ? 'CARGANDO…' : angelito ? 'GIRAR RULETA' : 'DESCUBRIR MI PLATO'} <ArrowRight size={16} /></button>}</motion.article>
+  return <motion.article className={`experience-card ${angelito ? 'card-green' : 'card-red'}`} whileHover={{ y: -5 }}><div className="card-topline"><span>{result ? <><Check size={14} /> Revelado</> : 'Pendiente'}</span></div><div className="experience-icon">{angelito ? <Gift size={26} /> : <ChefHat size={26} />}</div><h3>{angelito ? 'Mi Angelito' : 'Mi plato navideño'}</h3><p>{angelito ? 'Descubre a quién tendrás que sorprender. El precio mínimo del regalo es RD$500.' : 'Descubre qué plato te corresponde llevar a la celebración y comparte tu aporte.'}</p>{result ? <div className="revealed-result"><Sparkles size={17} /><span><strong>{result}</strong><small>{angelito ? 'Tu Angelito' : 'Tu plato navideño'}</small></span></div> : <button className="outline-button" disabled={busy} onClick={() => void click()}>{busy ? 'CARGANDO…' : angelito ? 'GIRAR RULETA' : 'DESCUBRIR MI PLATO'} <ArrowRight size={16} /></button>}</motion.article>
 }
 
 function AdminDashboard({ onError }: { onError: (message: string) => void }) {
