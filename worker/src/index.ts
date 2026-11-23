@@ -6,7 +6,7 @@ interface Env {
 }
 
 type Session = { userId: string; userType: 'participant' | 'admin' }
-type Participant = { id: string; full_name: string; created_at: string; is_active: number }
+type Participant = { id: string; full_name: string; created_at: string; is_active: number; default_dish_id: string | null }
 type Dish = { id: string; name: string; description: string | null; created_at: string }
 
 const json = (data: unknown, status = 200, origin = '*') =>
@@ -75,18 +75,23 @@ async function participantLogin(request: Request, env: Env, origin: string) {
   if (!normalized || normalized.length < 6) return json({ success: false, message: 'Código inválido.' }, 400, origin)
   const event = await env.DB.prepare("SELECT status FROM events WHERE id = 'main'").first<{ status: string }>()
   if (event?.status !== 'published') return json({ success: false, message: 'El evento todavía no está publicado.' }, 409, origin)
-  const row = await env.DB.prepare('SELECT id, full_name FROM participants WHERE event_id = ? AND code_hash = ? AND is_active = 1')
-    .bind('main', await hmac(normalized, env.CODE_PEPPER)).first<{ id: string; full_name: string }>()
+  const row = await env.DB.prepare(`SELECT p.id, p.full_name, d.name AS default_dish_name
+    FROM participants p LEFT JOIN dishes d ON d.id = p.default_dish_id
+    WHERE p.event_id = ? AND p.code_hash = ? AND p.is_active = 1`)
+    .bind('main', await hmac(normalized, env.CODE_PEPPER)).first<{ id: string; full_name: string; default_dish_name: string | null }>()
   if (!row) return json({ success: false, message: 'El código no es válido.' }, 401, origin)
-  return json({ success: true, data: { token: await createSession(env, row.id, 'participant'), participantName: row.full_name } }, 200, origin)
+  return json({ success: true, data: { token: await createSession(env, row.id, 'participant'), participantName: row.full_name, defaultDishName: row.default_dish_name } }, 200, origin)
 }
 
 async function participantMe(request: Request, env: Env, origin: string) {
   const current = await getSession(request, env)
   if (!current || current.userType !== 'participant') return json({ success: false, message: 'Sesión inválida o caducada.' }, 401, origin)
-  const participant = await env.DB.prepare('SELECT full_name FROM participants WHERE id = ? AND event_id = ?').bind(current.userId, 'main').first<{ full_name: string }>()
+  const participant = await env.DB.prepare(`SELECT p.full_name, d.name AS default_dish_name
+    FROM participants p LEFT JOIN dishes d ON d.id = p.default_dish_id
+    WHERE p.id = ? AND p.event_id = ?`)
+    .bind(current.userId, 'main').first<{ full_name: string; default_dish_name: string | null }>()
   if (!participant) return json({ success: false, message: 'Participante no encontrado.' }, 404, origin)
-  return json({ success: true, data: { participantName: participant.full_name } }, 200, origin)
+  return json({ success: true, data: { participantName: participant.full_name, defaultDishName: participant.default_dish_name } }, 200, origin)
 }
 
 async function setupAdmin(request: Request, env: Env, origin: string) {
@@ -113,7 +118,7 @@ async function adminLogin(request: Request, env: Env, origin: string) {
 async function adminDashboard(env: Env, origin: string) {
   const [event, participants, dishes, progress] = await Promise.all([
     env.DB.prepare("SELECT id, name, status, created_at, published_at FROM events WHERE id = 'main'").first(),
-    env.DB.prepare('SELECT id, full_name, created_at, is_active FROM participants WHERE event_id = ? ORDER BY created_at').bind('main').all<Participant>(),
+    env.DB.prepare('SELECT id, full_name, created_at, is_active, default_dish_id FROM participants WHERE event_id = ? ORDER BY created_at').bind('main').all<Participant>(),
     env.DB.prepare('SELECT id, name, description, created_at FROM dishes WHERE event_id = ? ORDER BY created_at').bind('main').all<Dish>(),
     env.DB.prepare('SELECT COUNT(*) AS total, SUM(CASE WHEN angelito_revealed_at IS NOT NULL THEN 1 ELSE 0 END) AS angelito, SUM(CASE WHEN food_revealed_at IS NOT NULL THEN 1 ELSE 0 END) AS food FROM assignments WHERE event_id = ?').bind('main').first(),
   ])
@@ -122,27 +127,43 @@ async function adminDashboard(env: Env, origin: string) {
 
 async function addParticipant(request: Request, env: Env, origin: string) {
   const event = await env.DB.prepare("SELECT status FROM events WHERE id = 'main'").first<{ status: string }>()
-  const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM participants WHERE event_id = ?').bind('main').first<{ count: number }>()
-  const { fullName } = await bodyOf<{ fullName?: string }>(request)
-  if (event?.status !== 'draft') return json({ success: false, message: 'El evento ya está publicado.' }, 409, origin)
-  if ((count?.count ?? 0) >= 10) return json({ success: false, message: 'Solo se permiten 10 participantes.' }, 409, origin)
+  const { fullName, defaultDishId } = await bodyOf<{ fullName?: string; defaultDishId?: string }>(request)
   if (!fullName?.trim()) return json({ success: false, message: 'El nombre es obligatorio.' }, 400, origin)
+  if (defaultDishId) {
+    const dish = await env.DB.prepare('SELECT id FROM dishes WHERE id = ? AND event_id = ?').bind(defaultDishId, 'main').first()
+    if (!dish) return json({ success: false, message: 'El plato por defecto no existe.' }, 400, origin)
+  }
   const code = personalCode()
+  const participantId = id()
   try {
-    const result = await env.DB.prepare('INSERT INTO participants (id, event_id, full_name, code_hash) VALUES (?, ?, ?, ?)')
-      .bind(id(), 'main', fullName.trim(), await hmac(code, env.CODE_PEPPER)).run()
-    return json({ success: true, data: { id: result.meta.last_row_id, fullName: fullName.trim(), code } }, 201, origin)
+    const statements = [
+      env.DB.prepare('INSERT INTO participants (id, event_id, full_name, code_hash, default_dish_id) VALUES (?, ?, ?, ?, ?)')
+        .bind(participantId, 'main', fullName.trim(), await hmac(code, env.CODE_PEPPER), defaultDishId || null),
+    ]
+    if (event?.status === 'published') {
+      const [participants, recipients, dishes] = await Promise.all([
+        env.DB.prepare('SELECT id FROM participants WHERE event_id = ?').bind('main').all<{ id: string }>(),
+        env.DB.prepare('SELECT angelito_recipient_id FROM assignments WHERE event_id = ?').bind('main').all<{ angelito_recipient_id: string }>(),
+        env.DB.prepare('SELECT id FROM dishes WHERE event_id = ?').bind('main').all<{ id: string }>(),
+      ])
+      if (!dishes.results.length) return json({ success: false, message: 'Agrega al menos un plato antes de publicar el evento.' }, 409, origin)
+      const usedRecipients = new Set(recipients.results.map((row) => row.angelito_recipient_id))
+      let candidate = participants.results.find((row) => row.id !== participantId && !usedRecipients.has(row.id))
+      if (!candidate) candidate = participants.results.find((row) => row.id !== participantId)
+      if (!candidate) return json({ success: false, message: 'Se necesita al menos otro participante para asignar el Angelito.' }, 409, origin)
+      const foodDishId = defaultDishId || dishes.results[0].id
+      statements.push(env.DB.prepare('INSERT INTO assignments (id, event_id, participant_id, angelito_recipient_id, food_dish_id) VALUES (?, ?, ?, ?, ?)')
+        .bind(id(), 'main', participantId, candidate.id, foodDishId))
+    }
+    await env.DB.batch(statements)
+    return json({ success: true, data: { id: participantId, fullName: fullName.trim(), code } }, 201, origin)
   } catch {
     return json({ success: false, message: 'Ese participante ya existe.' }, 409, origin)
   }
 }
 
 async function addDish(request: Request, env: Env, origin: string) {
-  const event = await env.DB.prepare("SELECT status FROM events WHERE id = 'main'").first<{ status: string }>()
-  const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM dishes WHERE event_id = ?').bind('main').first<{ count: number }>()
   const { name, description } = await bodyOf<{ name?: string; description?: string }>(request)
-  if (event?.status !== 'draft') return json({ success: false, message: 'El evento ya está publicado.' }, 409, origin)
-  if ((count?.count ?? 0) >= 10) return json({ success: false, message: 'Solo se permiten 10 platos.' }, 409, origin)
   if (!name?.trim()) return json({ success: false, message: 'El nombre del plato es obligatorio.' }, 400, origin)
   try {
     await env.DB.prepare('INSERT INTO dishes (id, event_id, name, description) VALUES (?, ?, ?, ?)').bind(id(), 'main', name.trim(), description?.trim() || null).run()
@@ -183,17 +204,21 @@ function shuffle<T>(values: T[]) {
 
 async function publish(env: Env, origin: string) {
   const event = await env.DB.prepare("SELECT status FROM events WHERE id = 'main'").first<{ status: string }>()
-  const participants = (await env.DB.prepare('SELECT id FROM participants WHERE event_id = ? ORDER BY id').bind('main').all<{ id: string }>()).results.map((row) => row.id)
-  const dishes = (await env.DB.prepare('SELECT id FROM dishes WHERE event_id = ? ORDER BY id').bind('main').all<{ id: string }>()).results.map((row) => row.id)
+  const participantRows = (await env.DB.prepare('SELECT id, default_dish_id FROM participants WHERE event_id = ? ORDER BY id').bind('main').all<{ id: string; default_dish_id: string | null }>()).results
+  const dishRows = (await env.DB.prepare('SELECT id FROM dishes WHERE event_id = ? ORDER BY id').bind('main').all<{ id: string }>()).results
+  const participants = participantRows.map((row) => row.id)
+  const dishes = dishRows.map((row) => row.id)
   if (event?.status !== 'draft') return json({ success: false, message: 'El evento ya fue publicado.' }, 409, origin)
-  if (participants.length !== 10 || dishes.length !== 10) return json({ success: false, message: 'Necesitas exactamente 10 participantes y 10 platos.' }, 409, origin)
+  if (!participants.length) return json({ success: false, message: 'Agrega al menos un participante.' }, 409, origin)
+  if (!dishes.length) return json({ success: false, message: 'Agrega al menos un plato.' }, 409, origin)
+  if (participants.length < 2) return json({ success: false, message: 'Se necesitan al menos dos participantes para sortear los Angelitos.' }, 409, origin)
   let recipients: string[] = []
   do {
     recipients = shuffle([...participants])
   } while (recipients.some((recipient, index) => recipient === participants[index]))
   const statements = participants.map((participant, index) =>
     env.DB.prepare('INSERT INTO assignments (id, event_id, participant_id, angelito_recipient_id, food_dish_id) VALUES (?, ?, ?, ?, ?)')
-      .bind(id(), 'main', participant, recipients[index], dishes[index]))
+      .bind(id(), 'main', participant, recipients[index], participantRows[index].default_dish_id || dishes[index % dishes.length]))
   statements.push(env.DB.prepare("UPDATE events SET status = 'published', published_at = CURRENT_TIMESTAMP WHERE id = 'main'"))
   await env.DB.batch(statements)
   return json({ success: true, message: 'Evento publicado y sorteos fijados.' }, 200, origin)
@@ -210,6 +235,18 @@ async function resetEvent(env: Env, origin: string) {
 }
 
 async function reveal(env: Env, kind: 'angelito' | 'food', current: Session, origin: string) {
+  if (kind === 'food') {
+    const defaultDish = await env.DB.prepare(`SELECT d.name AS result, d.id
+      FROM participants p JOIN dishes d ON d.id = p.default_dish_id
+      WHERE p.id = ? AND p.event_id = ?`)
+      .bind(current.userId, 'main').first<{ result: string; id: string }>()
+    if (defaultDish) {
+      await env.DB.prepare(`UPDATE assignments SET food_revealed_at = COALESCE(food_revealed_at, CURRENT_TIMESTAMP)
+        WHERE participant_id = ? AND event_id = ?`)
+        .bind(current.userId, 'main').run()
+      return json({ success: true, data: { result: defaultDish.result, revealed: new Date().toISOString() } }, 200, origin)
+    }
+  }
   const revealed = kind === 'angelito' ? 'angelito_revealed_at' : 'food_revealed_at'
   const label = kind === 'angelito' ? 'p.full_name AS result' : 'd.name AS result'
   const join = kind === 'angelito' ? 'JOIN participants p ON p.id = a.angelito_recipient_id' : 'JOIN dishes d ON d.id = a.food_dish_id'

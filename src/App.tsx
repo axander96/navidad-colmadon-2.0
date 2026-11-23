@@ -7,7 +7,7 @@ type View = 'home' | 'login' | 'dashboard' | 'admin-login' | 'admin'
 type Reveal = 'angelito' | 'food'
 type AdminData = {
   event: { status: 'draft' | 'published'; name: string }
-  participants: { id: string; full_name: string }[]
+  participants: { id: string; full_name: string; default_dish_id: string | null }[]
   dishes: { id: string; name: string; description: string | null }[]
   progress: { total: number; angelito: number; food: number } | null
 }
@@ -31,12 +31,13 @@ function App() {
   const [busy, setBusy] = useState(false)
   const [revealed, setRevealed] = useState<Partial<Record<Reveal, string>>>({})
   const [participantName, setParticipantName] = useState('')
+  const [defaultDishName, setDefaultDishName] = useState('')
 
   const participantLogin = async (event: FormEvent) => {
     event.preventDefault(); setError('')
     if (code.trim().length < 6) { setError('Escribe tu código personal.'); return }
     setBusy(true)
-    try { const data = await request<{ token: string; participantName: string }>('/api/auth/participant', { method: 'POST', body: JSON.stringify({ code }) }); sessionStorage.setItem('navidad_session', data.token); setParticipantName(data.participantName); setView('dashboard') }
+    try { const data = await request<{ token: string; participantName: string; defaultDishName: string | null }>('/api/auth/participant', { method: 'POST', body: JSON.stringify({ code }) }); sessionStorage.setItem('navidad_session', data.token); setParticipantName(data.participantName); setDefaultDishName(data.defaultDishName ?? ''); setView('dashboard') }
     catch (caught) { setError(caught instanceof Error ? caught.message : 'No pudimos iniciar sesión.') }
     finally { setBusy(false) }
   }
@@ -57,7 +58,7 @@ function App() {
     </header>
     <AnimatePresence mode="wait">
       {view === 'login' && <Login title="Ha llegado el momento" subtitle="Usa el código personal que te entregó el organizador." label="Código personal" value={code} onChange={(value) => setCode(value.toUpperCase())} onSubmit={participantLogin} error={error} busy={busy} onOrganizer={() => setView('admin-login')} />}
-      {view === 'dashboard' && <ParticipantDashboard name={participantName} revealed={revealed} onReveal={reveal} />}
+      {view === 'dashboard' && <ParticipantDashboard name={participantName} defaultDishName={defaultDishName} revealed={revealed} onReveal={reveal} />}
       {view === 'admin-login' && <AdminLogin onSuccess={() => setView('admin')} />}
       {view === 'admin' && <AdminDashboard onError={setError} />}
     </AnimatePresence>
@@ -108,8 +109,8 @@ function BackgroundMusic() {
   </div>
 }
 
-function ParticipantDashboard({ name, revealed, onReveal }: { name: string; revealed: Partial<Record<Reveal, string>>; onReveal: (kind: Reveal) => Promise<void> }) {
-  return <motion.section className="dashboard-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><BackgroundMusic /><div className="dashboard-heading"><div><h2>Hola, <em>{name}</em></h2></div><div className="status-pill"><span /> Evento publicado</div></div><div className="experience-grid"><ExperienceCard type="angelito" result={revealed.angelito} onReveal={onReveal} /><ExperienceCard type="food" result={revealed.food} onReveal={onReveal} /></div></motion.section>
+function ParticipantDashboard({ name, defaultDishName, revealed, onReveal }: { name: string; defaultDishName: string; revealed: Partial<Record<Reveal, string>>; onReveal: (kind: Reveal) => Promise<void> }) {
+  return <motion.section className="dashboard-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><BackgroundMusic /><div className="dashboard-heading"><div><h2>Hola, <em>{name}</em></h2></div><div className="status-pill"><span /> Evento publicado</div></div><div className="experience-grid"><ExperienceCard type="angelito" result={revealed.angelito} onReveal={onReveal} /><ExperienceCard type="food" result={revealed.food || defaultDishName} onReveal={onReveal} /></div></motion.section>
 }
 
 function ExperienceCard({ type, result, onReveal }: { type: Reveal; result?: string; onReveal: (kind: Reveal) => Promise<void> }) {
@@ -119,16 +120,48 @@ function ExperienceCard({ type, result, onReveal }: { type: Reveal; result?: str
 }
 
 function AdminDashboard({ onError }: { onError: (message: string) => void }) {
-  const [data, setData] = useState<AdminData | null>(null); const [name, setName] = useState(''); const [dish, setDish] = useState(''); const [code, setCode] = useState(''); const [busy, setBusy] = useState(false); const adminToken = sessionStorage.getItem('navidad_admin_session') ?? ''
+  const [data, setData] = useState<AdminData | null>(null); const [name, setName] = useState(''); const [defaultDishId, setDefaultDishId] = useState(''); const [dish, setDish] = useState(''); const [code, setCode] = useState(''); const [busy, setBusy] = useState(false); const adminToken = sessionStorage.getItem('navidad_admin_session') ?? ''
   const load = async () => { try { setData(await request<AdminData>('/api/admin/dashboard', {}, adminToken)) } catch (caught) { onError(caught instanceof Error ? caught.message : 'No se pudo cargar el panel.') } }
   useEffect(() => { void load() }, [])
-  const add = async (kind: 'participant' | 'dish') => { setBusy(true); try { if (kind === 'participant') { const result = await request<{ code: string }>('/api/admin/participants', { method: 'POST', body: JSON.stringify({ fullName: name }) }, adminToken); setCode(result.code); setName('') } else { await request('/api/admin/dishes', { method: 'POST', body: JSON.stringify({ name: dish }) }, adminToken); setDish('') }; await load() } catch (caught) { onError(caught instanceof Error ? caught.message : 'No se pudo guardar.') } finally { setBusy(false) } }
+  const add = async (kind: 'participant' | 'dish') => { setBusy(true); try { if (kind === 'participant') { const result = await request<{ code: string }>('/api/admin/participants', { method: 'POST', body: JSON.stringify({ fullName: name, defaultDishId: defaultDishId || null }) }, adminToken); setCode(result.code); setName(''); setDefaultDishId('') } else { await request('/api/admin/dishes', { method: 'POST', body: JSON.stringify({ name: dish }) }, adminToken); setDish('') }; await load() } catch (caught) { onError(caught instanceof Error ? caught.message : 'No se pudo guardar.') } finally { setBusy(false) } }
   const publish = async () => { if (!window.confirm('¿Publicar el evento? Esta acción fija ambos sorteos.')) return; setBusy(true); try { await request('/api/admin/events/main/publish', { method: 'POST' }, adminToken); await load() } catch (caught) { onError(caught instanceof Error ? caught.message : 'No se pudo publicar.') } finally { setBusy(false) } }
   const reset = async () => { if (!window.confirm('¿Reiniciar el sorteo? Se eliminarán todos los resultados, pero se conservarán participantes y platos. Esta acción no se puede deshacer.')) return; setBusy(true); try { await request('/api/admin/events/main/reset', { method: 'POST' }, adminToken); await load() } catch (caught) { onError(caught instanceof Error ? caught.message : 'No se pudo reiniciar.') } finally { setBusy(false) } }
   if (!data) return <section className="center-page"><div className="login-card"><p>Cargando panel…</p></div></section>
   const draft = data.event.status === 'draft'
   const remove = async (kind: 'participants' | 'dishes', itemId: string) => { if (!window.confirm('¿Eliminar este registro?')) return; try { await request(`/api/admin/${kind}/${itemId}`, { method: 'DELETE' }, adminToken); await load() } catch (caught) { onError(caught instanceof Error ? caught.message : 'No se pudo eliminar.') } }
-  return <motion.section className="admin-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><div className="dashboard-heading"><div><span className="eyebrow">Área del organizador</span><h2>Panel de <em>control.</em></h2><p>{data.event.name}</p></div><div className={`status-pill ${draft ? '' : 'published'}`}><span /> {draft ? 'Borrador' : 'Publicado'}</div></div><div className="admin-stats"><Stat icon={<Users size={18} />} label="Participantes" value={`${data.participants.length}/10`} /><Stat icon={<UtensilsCrossed size={18} />} label="Platos" value={`${data.dishes.length}/10`} /><Stat icon={<Gift size={18} />} label="Angelitos revelados" value={`${data.progress?.angelito ?? 0}/10`} /><Stat icon={<ChefHat size={18} />} label="Platos revelados" value={`${data.progress?.food ?? 0}/10`} /></div><div className="admin-grid"><section className="admin-panel"><h3>Participantes</h3>{draft && <div className="admin-form"><input placeholder="Nombre completo" value={name} onChange={(event) => setName(event.target.value)} /><button className="outline-button" disabled={busy || !name.trim()} onClick={() => void add('participant')}>AGREGAR</button></div>}{code && <div className="generated-code"><span>Código generado: <strong>{code}</strong></span><button className="link-button" onClick={() => void navigator.clipboard.writeText(code)}>Copiar</button></div>}<ul className="admin-list">{data.participants.map((participant, index) => <li key={participant.id}><span>{index + 1}. {participant.full_name}</span>{draft ? <button className="link-button danger" onClick={() => void remove('participants', participant.id)}>Eliminar</button> : <Check size={15} />}</li>)}</ul></section><section className="admin-panel"><h3>Platos navideños</h3>{draft && <div className="admin-form"><input placeholder="Nombre del plato" value={dish} onChange={(event) => setDish(event.target.value)} /><button className="outline-button" disabled={busy || !dish.trim()} onClick={() => void add('dish')}>AGREGAR</button></div>}<ul className="admin-list">{data.dishes.map((item, index) => <li key={item.id}><span>{index + 1}. {item.name}</span>{draft ? <button className="link-button danger" onClick={() => void remove('dishes', item.id)}>Eliminar</button> : <Check size={15} />}</li>)}</ul></section></div>{draft ? <button className="primary-button publish-button" disabled={busy || data.participants.length !== 10 || data.dishes.length !== 10} onClick={() => void publish()}>{busy ? 'PROCESANDO…' : 'PUBLICAR EVENTO Y GENERAR SORTEOS'} <WandSparkles size={17} /></button> : <button className="reset-button" disabled={busy} onClick={() => void reset()}>{busy ? 'REINICIANDO…' : 'REINICIAR SORTEO'} <WandSparkles size={17} /></button>}</motion.section>
+  return <motion.section className="admin-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <div className="dashboard-heading"><div><span className="eyebrow">Área del organizador</span><h2>Panel de <em>control.</em></h2><p>{data.event.name}</p></div><div className={`status-pill ${draft ? '' : 'published'}`}><span /> {draft ? 'Borrador' : 'Publicado'}</div></div>
+    <div className="admin-stats">
+      <Stat icon={<Users size={18} />} label="Participantes" value={`${data.participants.length}`} />
+      <Stat icon={<UtensilsCrossed size={18} />} label="Platos" value={`${data.dishes.length}`} />
+      <Stat icon={<Gift size={18} />} label="Angelitos revelados" value={`${data.progress?.angelito ?? 0}`} />
+      <Stat icon={<ChefHat size={18} />} label="Platos revelados" value={`${data.progress?.food ?? 0}`} />
+    </div>
+    <div className="admin-grid">
+      <section className="admin-panel">
+        <h3>Participantes</h3>
+        <div className="admin-form participant-form">
+          <input placeholder="Nombre completo" value={name} onChange={(event) => setName(event.target.value)} />
+          <select value={defaultDishId} onChange={(event) => setDefaultDishId(event.target.value)}>
+            <option value="">Plato aleatorio</option>
+            {data.dishes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+          <button className="outline-button" disabled={busy || !name.trim()} onClick={() => void add('participant')}>AGREGAR</button>
+        </div>
+        {code && <div className="generated-code"><span>Código generado: <strong>{code}</strong></span><button className="link-button" onClick={() => void navigator.clipboard.writeText(code)}>Copiar</button></div>}
+        <ul className="admin-list">{data.participants.map((participant, index) => {
+          const defaultDish = data.dishes.find((item) => item.id === participant.default_dish_id)
+          return <li key={participant.id}><span>{index + 1}. {participant.full_name}{defaultDish ? ` · Plato: ${defaultDish.name}` : ''}</span>{draft ? <button className="link-button danger" onClick={() => void remove('participants', participant.id)}>Eliminar</button> : <Check size={15} />}</li>
+        })}</ul>
+      </section>
+      <section className="admin-panel">
+        <h3>Platos navideños</h3>
+        <div className="admin-form"><input placeholder="Nombre del plato" value={dish} onChange={(event) => setDish(event.target.value)} /><button className="outline-button" disabled={busy || !dish.trim()} onClick={() => void add('dish')}>AGREGAR</button></div>
+        <ul className="admin-list">{data.dishes.map((item, index) => <li key={item.id}><span>{index + 1}. {item.name}</span>{draft ? <button className="link-button danger" onClick={() => void remove('dishes', item.id)}>Eliminar</button> : <Check size={15} />}</li>)}</ul>
+      </section>
+    </div>
+    {draft ? <button className="primary-button publish-button" disabled={busy || data.participants.length < 2 || data.dishes.length < 1} onClick={() => void publish()}>{busy ? 'PROCESANDO…' : 'PUBLICAR EVENTO Y GENERAR SORTEOS'} <WandSparkles size={17} /></button> : <button className="reset-button" disabled={busy} onClick={() => void reset()}>{busy ? 'REINICIANDO…' : 'REINICIAR SORTEO'} <WandSparkles size={17} /></button>}
+  </motion.section>
 }
 
 function Stat({ icon, label, value }: { icon: ReactNode; label: string; value: string }) { return <div className="stat-card">{icon}<small>{label}</small><strong>{value}</strong></div> }
