@@ -175,9 +175,22 @@ async function addDish(request: Request, env: Env, origin: string) {
 
 async function removeDraftItem(request: Request, env: Env, origin: string, kind: 'participants' | 'dishes', itemId: string) {
   const event = await env.DB.prepare("SELECT status FROM events WHERE id = 'main'").first<{ status: string }>()
-  if (event?.status !== 'draft') return json({ success: false, message: 'El evento ya está publicado.' }, 409, origin)
-  const table = kind === 'participants' ? 'participants' : 'dishes'
-  await env.DB.prepare(`DELETE FROM ${table} WHERE id = ? AND event_id = ?`).bind(itemId, 'main').run()
+  if (kind === 'dishes' && event?.status !== 'draft') return json({ success: false, message: 'El evento ya está publicado.' }, 409, origin)
+  if (kind === 'participants') {
+    const participant = await env.DB.prepare('SELECT id FROM participants WHERE id = ? AND event_id = ?')
+      .bind(itemId, 'main').first<{ id: string }>()
+    if (!participant) return json({ success: false, message: 'Participante no encontrado.' }, 404, origin)
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM assignments WHERE event_id = ? AND (participant_id = ? OR angelito_recipient_id = ?)')
+        .bind('main', itemId, itemId),
+      env.DB.prepare('DELETE FROM sessions WHERE user_type = ? AND user_id = ?')
+        .bind('participant', itemId),
+      env.DB.prepare('DELETE FROM participants WHERE id = ? AND event_id = ?')
+        .bind(itemId, 'main'),
+    ])
+    return json({ success: true, message: 'Participante eliminado. Su Angelito volvió a estar disponible.' }, 200, origin)
+  }
+  await env.DB.prepare('DELETE FROM dishes WHERE id = ? AND event_id = ?').bind(itemId, 'main').run()
   return json({ success: true, message: 'Registro eliminado.' }, 200, origin)
 }
 

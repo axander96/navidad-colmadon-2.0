@@ -128,7 +128,14 @@ function AdminDashboard({ onError }: { onError: (message: string) => void }) {
   const reset = async () => { if (!window.confirm('¿Reiniciar el sorteo? Se eliminarán todos los resultados, pero se conservarán participantes y platos. Esta acción no se puede deshacer.')) return; setBusy(true); try { await request('/api/admin/events/main/reset', { method: 'POST' }, adminToken); await load() } catch (caught) { onError(caught instanceof Error ? caught.message : 'No se pudo reiniciar.') } finally { setBusy(false) } }
   if (!data) return <section className="center-page"><div className="login-card"><p>Cargando panel…</p></div></section>
   const draft = data.event.status === 'draft'
-  const remove = async (kind: 'participants' | 'dishes', itemId: string) => { if (!window.confirm('¿Eliminar este registro?')) return; try { await request(`/api/admin/${kind}/${itemId}`, { method: 'DELETE' }, adminToken); await load() } catch (caught) { onError(caught instanceof Error ? caught.message : 'No se pudo eliminar.') } }
+  const remove = async (kind: 'participants' | 'dishes', itemId: string) => {
+    const message = kind === 'participants'
+      ? '¿Eliminar este participante? Se eliminará su asignación y su Angelito volverá a estar disponible.'
+      : '¿Eliminar este plato?'
+    if (!window.confirm(message)) return
+    try { await request(`/api/admin/${kind}/${itemId}`, { method: 'DELETE' }, adminToken); await load() }
+    catch (caught) { onError(caught instanceof Error ? caught.message : 'No se pudo eliminar.') }
+  }
   return <motion.section className="admin-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
     <div className="dashboard-heading"><div><span className="eyebrow">Área del organizador</span><h2>Panel de <em>control.</em></h2><p>{data.event.name}</p></div><div className={`status-pill ${draft ? '' : 'published'}`}><span /> {draft ? 'Borrador' : 'Publicado'}</div></div>
     <div className="admin-stats">
@@ -151,7 +158,7 @@ function AdminDashboard({ onError }: { onError: (message: string) => void }) {
         {code && <div className="generated-code"><span>Código generado: <strong>{code}</strong></span><button className="link-button" onClick={() => void navigator.clipboard.writeText(code)}>Copiar</button></div>}
         <ul className="admin-list">{data.participants.map((participant, index) => {
           const defaultDish = data.dishes.find((item) => item.id === participant.default_dish_id)
-          return <li key={participant.id}><span>{index + 1}. {participant.full_name}{defaultDish ? ` · Plato: ${defaultDish.name}` : ''}</span>{draft ? <button className="link-button danger" onClick={() => void remove('participants', participant.id)}>Eliminar</button> : <Check size={15} />}</li>
+          return <li key={participant.id}><span>{index + 1}. {participant.full_name}{defaultDish ? ` · Plato: ${defaultDish.name}` : ''}</span><button className="link-button danger" onClick={() => void remove('participants', participant.id)}>Eliminar</button></li>
         })}</ul>
       </section>
       <section className="admin-panel">

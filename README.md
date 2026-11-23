@@ -46,6 +46,7 @@ Wrangler solicitará la clave de forma interactiva; no la guardes en Git.
 5. Agrega la cantidad de participantes y platos que necesites. Puedes elegir un plato por defecto opcional para cada participante; el código de cada participante se muestra solo al crearlo, cópialo o entrégalo en ese momento.
 6. Con al menos dos participantes y un plato, pulsa **PUBLICAR EVENTO Y GENERAR SORTEOS**.
 7. Después de publicar puedes seguir agregando participantes y platos. Los sorteos existentes no se regeneran; el nuevo participante recibe un Angelito entre los participantes que todavía no están usados como destinatario y puede tener un plato por defecto.
+8. Puedes eliminar participantes antes o después de publicar. Al eliminarlo se elimina su acceso y sus asignaciones; si era destinatario de un Angelito, vuelve a quedar disponible para asignaciones posteriores.
 
 El botón **REINICIAR SORTEO** solo aparece después de publicar. Reinicia los resultados y devuelve el evento a borrador, pero conserva todos los participantes, sus códigos y los platos. Requiere confirmación y luego debes volver a publicar para generar nuevas asignaciones.
 
