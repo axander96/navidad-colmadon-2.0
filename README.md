@@ -28,7 +28,7 @@ npx wrangler secret put ADMIN_SETUP_KEY
 
 6. Despliega con `npm run deploy`. El Worker publicado es `https://navidad-colmadon-api.alexanderrodriguezacevedo.workers.dev`. Configura esa URL como variable `VITE_API_URL` del entorno `github-pages` en GitHub Actions.
 
-Los valores secretos no se guardan en Git ni en el frontend. La migración crea el evento, pero los 10 participantes y 10 platos deben registrarse desde el panel administrativo antes de publicar.
+Los valores secretos no se guardan en Git ni en el frontend. La migración crea el evento y los participantes y platos se registran desde el panel administrativo sin un límite fijo de cantidad.
 
 ## Primer acceso del organizador
 
@@ -43,8 +43,9 @@ Wrangler solicitará la clave de forma interactiva; no la guardes en Git.
 2. Abre la [aplicación publicada](https://axander96.github.io/navidad-colmadon-2.0/) y pulsa **Organizador**.
 3. Pulsa **Configuración inicial** e introduce la clave, un usuario y una contraseña de al menos 12 caracteres.
 4. Vuelve al formulario normal e inicia sesión. La configuración inicial solo funciona una vez.
-5. Agrega exactamente 10 participantes y 10 platos. El código de cada participante se muestra solo al crearlo; cópialo o entrégalo en ese momento.
-6. Cuando ambos contadores estén en `10/10`, pulsa **PUBLICAR EVENTO Y GENERAR SORTEOS**. Después de publicar no se permiten cambios.
+5. Agrega la cantidad de participantes y platos que necesites. Puedes elegir un plato por defecto opcional para cada participante; el código de cada participante se muestra solo al crearlo, cópialo o entrégalo en ese momento.
+6. Con al menos dos participantes y un plato, pulsa **PUBLICAR EVENTO Y GENERAR SORTEOS**.
+7. Después de publicar puedes seguir agregando participantes y platos. Los sorteos existentes no se regeneran; el nuevo participante recibe un Angelito entre los participantes que todavía no están usados como destinatario y puede tener un plato por defecto.
 
 El botón **REINICIAR SORTEO** solo aparece después de publicar. Reinicia los resultados y devuelve el evento a borrador, pero conserva todos los participantes, sus códigos y los platos. Requiere confirmación y luego debes volver a publicar para generar nuevas asignaciones.
 
